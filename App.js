@@ -1,21 +1,46 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Platform, StyleSheet, Text, View, KeyboardAvoidingView, TextInput, TouchableOpacity, Keyboard } from 'react-native';
 import Task from './components/Task';
+import * as SQLite from "expo-sqlite";
+
+const db = SQLite.openDatabase('dbs.db')
+
 
 export default function App() {
   const [task, setTask] = useState();
   const [taskItems, setTaskItems] = useState([]);
 
+  
+
+  useEffect(() => {
+    createTable();
+    db.transaction((tx) => {
+      tx.executeSql("SELECT * FROM Tasks", [], (_, { rows: { _array } }) => setTaskItems(_array))});
+    
+  }, [])
+
   const handleAddTask = () => {
     Keyboard.dismiss();
-    setTaskItems([...taskItems, task]);
+    //setTaskItems([...taskItems, task]);
+    db.transaction((tx) => {
+      tx.executeSql("INSERT INTO Tasks (task) VALUES (?)", [task]);
+      tx.executeSql("SELECT * FROM Tasks", [], (_, { rows: { _array } }) => setTaskItems(_array));
+    })
     setTask(null);
   }
 
-  const completeTask = (index) => {
-    let itemsCopy = [...taskItems];
-    itemsCopy.splice(index, 1)
-    setTaskItems(itemsCopy)
+  const completeTask = (id) => {
+    db.transaction((tx) => {
+      tx.executeSql("DELETE FROM Tasks WHERE id = ?", [id]);
+      tx.executeSql("SELECT * FROM Tasks", [], (_, { rows: { _array } }) => setTaskItems(_array));
+    })
+  }
+  
+  const createTable = () => {
+    db.transaction((tx) => {
+      tx.executeSql(
+        "CREATE TABLE IF NOT EXISTS Tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, task TEXT);")
+    })
   }
 
   return (
@@ -24,10 +49,10 @@ export default function App() {
         <Text style={styles.sectionTitle}>Tasks</Text>
         <View style={styles.items}>
           {
-            taskItems.map((item, index) => {
+            taskItems.map(({id, task}) => {
               return (
-                <TouchableOpacity onPress={() => completeTask(index)}>
-                  <Task key={index} text={item}/>
+                <TouchableOpacity key={id} onPress={() => completeTask(id)}>
+                  <Task text={task}/>
                 </TouchableOpacity>
               )
             })
@@ -52,14 +77,15 @@ export default function App() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#e8eaed',
+    backgroundColor: '#000',
   },
   tasksWrapper: {
     paddingTop: 80,
     paddingHorizontal: 20
   },
   sectionTitle: {
-    fontSize: 24,
+    color: '#fff',
+    fontSize: 30,
     fontWeight: 'bold'
   },
   items: {
